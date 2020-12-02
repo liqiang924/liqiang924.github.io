@@ -7,7 +7,7 @@ query.exp.hg38 <- GDCquery(project = "TCGA-COAD",
                            workflow.type = "HTSeq - Counts")
 COADRnaseqSE <- GDCdownload(query.exp.hg38)
 COADRnaseqSE <- GDCprepare(query.exp.hg38)
-rownames(COADRnaseqSE) <- values(COADRnaseqSE)$external_gene_name
+rownames(COADRnaseqSE) <- rowData(COADRnaseqSE)$external_gene_name
 exp.hg38.values <- assay(COADRnaseqSE)
 ExpC = exp.hg38.values[,substring(colnames(exp.hg38.values),14,16)=="01A"]
 cli.query <- GDCquery(project =c("TCGA-COAD"),file.type = "xml",
