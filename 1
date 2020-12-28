@@ -1,2 +1,6 @@
 for file in `ls | grep fastq.gz` ; do newfile=`echo $file | sed 's/R/.R/'`; mv $file $newfile; done
 ls *.fastq.gz | while read id; do fastqc -o /data/QL/output/qc/ -q -t 20 $id; done
+ls /data/QL/wes_cancer/project/2.clean_fq/*.fq.gz >id.txt
+rename "s/AA/aa/" *
+ls *fq.gz.fq.gz | awk -F "101N_R2.fq.gz" '{print "mv "$0" "$1$2""}' |bash
+awk '!visited[$0]++' id2.txt > id3.txt
