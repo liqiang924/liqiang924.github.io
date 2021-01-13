@@ -192,3 +192,95 @@ do
 	--output cnv_plots \
 	--output-prefix ${id}.clean
 done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######################signature mutations
+rm(list=ls())
+options(stringsAsFactors=FALSE)
+## 切换镜像
+options(BioC_mirror="https://mirrors.ustc.edu.cn/bioc/")
+options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
+## 安装R包
+install.packages('deconstructSigs')
+BiocManager::install('BSgenome')
+BiocManager::install('BSgenome.Hsapiens.UCSC.hg38')
+library(deconstructSigs)
+## https://github.com/raerose01/deconstructSigs
+
+## 读入数据
+maf=read.table('./7.annotation/vep/VEP_merge.maf',header = T,sep = '\t',quote = "")
+maf[1:5,1:5]
+
+## 构建肿瘤突变数据框，需要5列信息: sample.ID,chr,pos,ref,alt 
+sample.mut.ref <- data.frame(Sample=maf[,16], 
+                            chr = maf[,5],
+                            pos = maf[,6],
+                            ref = maf[,11],
+                            alt = maf[,13])
+			    
+			    
+			    
+			    
+			    
+			    
+			    
+cd ~/wes_cancer/biosoft
+# wget 下载地址
+tar -zxvf annovar.latest.tar.gz
+cd annovar
+nohup ./annotate_variation.pl -downdb -webfrom annovar gnomad_genome --buildver hg38 humandb/ >down.log 2>&1 &
+cat config | while  read id
+do
+echo "start ANNOVAR for ${id} " `date`
+~/biosoft/annovar/table_annovar.pl ./6.mutect/${id}_filter.vcf ~/biosoft/annovar/humandb/ \
+-buildver hg38 \
+-out ./7.annotation/annovar/${id} \
+-remove \
+-protocol refGene,knownGene,clinvar_20170905 \
+-operation g,g,f \
+-nastring . \
+-vcfinput
+echo "end ANNOVAR for ${id} " `date`
+done
+
+
+
+## mutect.sh
+GATK=~/wes_cancer/biosoft/gatk-4.1.4.1/gatk
+ref=~/wes_cancer/data/Homo_sapiens_assembly38.fasta
+bed=~/wes_cancer/data/hg38.exon.bed
+
+cat config2 | while read id
+do
+	arr=(${id})
+	sample=${arr[1]}
+	T=./5.gatk/${arr[1]}_bqsr.bam
+	N=./5.gatk/${arr[0]}_bqsr.bam
+	echo "start Mutect2 for ${id}" `date`
+	$GATK  --java-options "-Xmx20G -Djava.io.tmpdir=./"  Mutect2 -R ${ref} \
+	-I ${T} -tumor  $(basename "$T" _bqsr.bam) \
+	-I ${N} -normal $(basename "$N" _bqsr.bam) \
+	-L ${bed}  \
+	-O ./6.mutect/${sample}_mutect2.vcf
+
+	$GATK  FilterMutectCalls \
+  -R ${ref} \
+	-V ./6.mutect/${sample}_mutect2.vcf \
+	-O ./6.mutect/${sample}_somatic.vcf
+	echo "end Mutect2 for ${id}" `date`
+
+	cat ./6.mutect/${sample}_somatic.vcf | perl -alne '{if(/^#/){print}else{next unless $F[6] eq "PASS";next if $F[0] =~/_/;print } }' > ./6.mutect/${sample}_filter.vcf
+done
