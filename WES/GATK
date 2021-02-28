@@ -38,7 +38,90 @@ cat CCDS.current.txt | grep  "Public" | perl -alne '{/\[(.*?)\]/;next unless $1;
 cd ~/wes_cancer/data
 gunzip Homo_sapiens_assembly38.fasta.gz
 time bwa index -a bwtsw -p gatk_hg38 ~/wes_cancer/data/Homo_sapiens_assembly38.fasta
+
+##质控去接头
 cd ~/wes_cancer/project
+cat config | while read id
+do
+	fastqc --outdir ./3.qc/raw_qc/ --threads 16 ./1.raw_fq/${id}*.fastq.gz >> ./3.qc/raw_qc/${id}_fastqc.log 2>&1 
+done 
+
+multiqc  ./3.qc/raw_qc/*zip  -o ./3.qc/raw_qc/multiqc
+
+## trim_galore.sh
+cat config | while read id
+do
+	fq1=./1.raw_fq/${id}_1.fastq.gz
+	fq2=./1.raw_fq/${id}_2.fastq.gz
+	trim_galore  --paired -q 28 --phred33 --length 30 --stringency 3 --gzip --cores 8 -o ./2.clean_fq  $fq1  $fq2 >> ./2.clean_fq/${id}_trim.log 2>&1
+done
+
+nohup bash trim_galore.sh &
+
+cat config | while read id
+do
+	fastqc --outdir ./3.qc/clean_qc/ --threads 16 ./2.clean_fq/${id}*.fq.gz >> ./3.qc/clean_qc/${id}_fastqc.log 2>&1 
+done 
+
+multiqc  ./3.qc/clean_qc/*zip  -o ./3.qc/clean_qc/multiqc
+
+##比对
+bash bwa.sh
+
+##标记或去重复序列
+bash MarkDuplicates.sh
+
+##矫正碱基质量
+bash BQSR.sh
+
+##生殖细胞突变
+GATK=~/wes_cancer/biosoft/gatk-4.1.4.1/gatk
+snp=~/wes_cancer/data/dbsnp_146.hg38.vcf.gz
+indel=~/wes_cancer/data/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz
+ref=~/wes_cancer/data/Homo_sapiens_assembly38.fasta
+bed=~/wes_cancer/data/hg38.exon.bed
+
+cat config  | while read id
+do
+	echo "start HC for ${id}" `date`
+	$GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" HaplotypeCaller -ERC GVCF \
+	-R ${ref} \
+	-I ./5.gatk/${id}_bqsr.bam \
+	--dbsnp ${snp} \
+	-L ${bed} \
+	-O ./5.gatk/${id}_raw.vcf \
+	1>./5.gatk/${id}_log.HC 2>&1
+	echo "end HC for ${id}" `date`
+
+done
+
+cd ./5.gatk/gvcf
+for chr in chr{1..22} chrX chrY chrM
+do
+
+time $GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GenomicsDBImport \
+-R ${ref} \
+$(ls ./*raw.vcf | awk '{print "-V "$0" "}') \
+-L ${chr} \
+--genomicsdb-workspace-path gvcfs_${chr}.db
+
+time $GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GenotypeGVCFs \
+-R ${ref} \
+-V gendb://gvcfs_${chr}.db \
+-O gvcfs_${chr}.vcf
+
+done
+
+$GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GatherVcfs \
+$(for i in {1..22} X Y M;do echo "-I gvcfs_chr${i}.vcf" ;done) \
+-O merge.vcf
+##体细胞突变
+bash pon.sh
+cd 5.gatk/
+bash GenomicsDB.sh
+../../biosoft/gatk-4.1.4.1/gatk  CreateSomaticPanelOfNormals -R ~/wes_cancer/data/Homo_sapiens_assembly38.fasta --germline-resource ~/wes_cancer/data/af-only-gnomad.hg38.vcf.gz -V gendb://pon_db -O pon.vcf.gz 1> CreateSomaticPanelOfNormals.log 2>&1
+cd ../
+
 ## cnvkit.sh
 GENOME=~/wes_cancer/data/Homo_sapiens_assembly38.fasta
 bed=~/wes_cancer/data/hg38.exon.bed
