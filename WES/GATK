@@ -92,35 +92,48 @@ do
 	-O ./5.gatk/${id}_raw.vcf \
 	1>./5.gatk/${id}_log.HC 2>&1
 	echo "end HC for ${id}" `date`
-
 done
 
 cd ./5.gatk/gvcf
 for chr in chr{1..22} chrX chrY chrM
 do
-
 time $GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GenomicsDBImport \
 -R ${ref} \
 $(ls ./*raw.vcf | awk '{print "-V "$0" "}') \
 -L ${chr} \
 --genomicsdb-workspace-path gvcfs_${chr}.db
-
 time $GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GenotypeGVCFs \
 -R ${ref} \
 -V gendb://gvcfs_${chr}.db \
 -O gvcfs_${chr}.vcf
-
 done
 
 $GATK --java-options "-Xmx20G -Djava.io.tmpdir=./" GatherVcfs \
 $(for i in {1..22} X Y M;do echo "-I gvcfs_chr${i}.vcf" ;done) \
 -O merge.vcf
+
 ##体细胞突变
 bash pon.sh
 cd 5.gatk/
 bash GenomicsDB.sh
 ../../biosoft/gatk-4.1.4.1/gatk  CreateSomaticPanelOfNormals -R ~/wes_cancer/data/Homo_sapiens_assembly38.fasta --germline-resource ~/wes_cancer/data/af-only-gnomad.hg38.vcf.gz -V gendb://pon_db -O pon.vcf.gz 1> CreateSomaticPanelOfNormals.log 2>&1
 cd ../
+bash Mutect.sh
+bash orientation.sh
+bash contamination.sh
+bash FilterMutectCalls.sh
+cat config3 | while read id; do ../biosoft/gatk-4.1.4.1/gatk --java-options "-Xmx8G" Funcotator --data-sources-path ../data/20190124s --ref-version hg38 --output-file-format "MAF" -R ~/wes_cancer/data/Homo_sapiens_assembly38.fasta -V ./6.mutect/${id}T_filtered.vcf -O ./7.annotation/funcotator/${id}T_filtered.annotated.maf --remove-filtered-variants; done
+
+cat config3 | while read id
+do 
+	grep -v '^#' ./7.annotation/funcotator/${id}T_filtered.annotated.maf | grep -v '^Hugo_Symbol'| awk -v T=${id}T -v N=${id}N 'BEGIN{FS="\t";OFS="\t"}{$16=T;$17=N;print $0}' >./7.annotation/funcotator/${id}T_funcotator.maf 
+done
+## 取出一个列名
+grep 'Hugo_Symbol' ./7.annotation/funcotator/101T_filtered.annotated.maf >./7.annotation/funcotator/header
+## 删除掉旧文件
+rm ./7.annotation/funcotator/*tmp.maf
+## 合并所有的样本的maf
+cat ./7.annotation/funcotator/header ./7.annotation/funcotator/*maf >./7.annotation/funcotator/funcotator_merge.maf
 
 ## cnvkit.sh
 GENOME=~/wes_cancer/data/Homo_sapiens_assembly38.fasta
