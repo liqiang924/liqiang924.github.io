@@ -1,0 +1,66 @@
+conda create -n rna python=3
+conda activate rna
+conda install -y STAR=2.6.0c 
+cd ~/rna_cancer/project/4.star/
+STAR --genomeDir /home/zf/rna_cancer/data/star_genome_d1_vd1_gtfv22/ --readFilesIn /home/zf/rna_cancer/project/WHOLE_SEQ-DATA_DIR/101N/Lib-a/101N.rna_1.fq.gz /home/zf/rna_cancer/project/WHOLE_SEQ-DATA_DIR/101N/Lib-a/101N.rna_2.fq.gz --runThreadN 8 --outFilterMultimapScoreRange 1 --outFilterMultimapNmax 20 --outFilterMismatchNmax 10 --alignIntronMax 500000 --alignMatesGapMax 1000000 --sjdbScore 2 --alignSJDBoverhangMin 1 --genomeLoad NoSharedMemory --readFilesCommand zcat --outFilterMatchNminOverLread 0.33 --outFilterScoreMinOverLread 0.33 --sjdbOverhang 100 --outSAMstrandField intronMotif --outSAMtype None --outSAMmode None
+cat config_T | while read id; do STAR --genomeDir /home/zf/rna_cancer/data/star_genome_d1_vd1_gtfv22/ --readFilesIn /home/zf/rna_cancer/project/WHOLE_SEQ-DATA_DIR/${id}/Lib-a/${id}.rna_1.fq.gz /home/zf/rna_cancer/project/WHOLE_SEQ-DATA_DIR/${id}/Lib-a/${id}.rna_2.fq.gz --runThreadN 16 --outFilterMultimapScoreRange 1 --outFilterMultimapNmax 20 --outFilterMismatchNmax 10 --alignIntronMax 500000 --alignMatesGapMax 1000000 --sjdbScore 2 --alignSJDBoverhangMin 1 --genomeLoad NoSharedMemory --readFilesCommand zcat --outFilterMatchNminOverLread 0.33 --outFilterScoreMinOverLread 0.33 --sjdbOverhang 100 --outSAMstrandField intronMotif --outSAMtype None --outSAMmode None --outFileNamePrefix ./1.align1_out/${id}_; done
+STAR --runMode genomeGenerate --genomeDir /home/zf/rna_cancer/project/4.star/3.index/ --genomeFastaFiles /home/zf/rna_cancer/data/GRCh38.d1.vd1.fa --sjdbOverhang 100 --runThreadN 16 --limitSjdbInsertNsj 3000000 --sjdbFileChrStartEnd $(cat config_T | while read id; do echo "./2.align1_out/${id}_SJ.out.tab"; done)
+cat config_T | while read id do; STAR --readFilesIn /data/QL/rna_cancer/project/WHOLE_SEQ-DATA_DIR/${id}/Lib-a/${id}.rna_1.fq.gz /data/QL/rna_cancer/project/WHOLE_SEQ-DATA_DIR/${id}/Lib-a/${id}.rna_2.fq.gz --alignIntronMax 1000000 --alignIntronMin 20 --alignMatesGapMax 1000000 --alignSJDBoverhangMin 1 --alignSJoverhangMin 8 --alignSoftClipAtReferenceEnds Yes --chimJunctionOverhangMin 15 --chimMainSegmentMultNmax 1 --chimOutType Junctions SeparateSAMold WithinBAM SoftClip --chimSegmentMin 15 --genomeDir 1.star_index/ --genomeLoad NoSharedMemory --limitSjdbInsertNsj 1200000 --outFileNamePrefix 4.align2/${id}_ --outFilterIntronMotifs None --outFilterMatchNminOverLread 0.33 --outFilterMismatchNmax 999 --outFilterMismatchNoverLmax 0.1 --outFilterMultimapNmax 20 --outFilterScoreMinOverLread 0.33 --outFilterType BySJout --outSAMattributes NH HI AS nM NM ch --outSAMstrandField intronMotif --outSAMtype BAM Unsorted --outSAMunmapped Within --quantMode TranscriptomeSAM GeneCounts --readFilesCommand zcat --runThreadN 16 --twopassMode Basic; done
+
+#star-fusion
+cat config1 | while read id; do STAR-Fusion --genome_lib_dir /data/QL/rna_cancer/project/5.star_fusion/GRCh38_gencode_v22_CTAT_lib_Mar012021.plug-n-play/ctat_genome_lib_build_dir -J /data/QL/rna_cancer/project/5.star_fusion/2.junction/${id}N_Chimeric.out.junction --output_dir /data/QL/rna_cancer/project/5.star_fusion/3.fusion/${id}N_; done
+
+#FusionInspector
+conda activate python3
+git clone --recursive https://github.com/FusionInspector/FusionInspector.git
+wget -c http://research-pub.gene.com/gmap/src/gmap-gsnap-2017-11-15.tar.gz
+tar -xvf gmap-gsnap-2017-11-15.tar.gz
+mkdir gmap
+cd gmap-2017-11-15/
+./configure --prefix=/data/QL/rna_cancer/biosoft/gmap
+make && make install
+vim ~/.bashrc
+source ~/.bashrc
+
+cut -f 1 /data/QL/rna_cancer/project/5.star_fusion/3.fusion/43T_/43T_star-fusion.fusion_predictions.abridged.tsv |grep -v "#" > /data/QL/rna_cancer/project/5.star_fusion/4.FusionInspector/43T_fusionlist
+nohup /data/QL/rna_cancer/biosoft/FusionInspector/FusionInspector  --fusions /data/QL/rna_cancer/project/5.star_fusion/4.FusionInspector/193T_fusionlist --genome_lib /data/QL/rna_cancer/project/5.star_fusion/1.ref_index/ctat_genome_lib_build_dir --left_fq /data/QL/rna_cancer/project/WHOLE_SEQ-DATA_DIR/193T/Lib-a/193T.rna_1.fq.gz --right_fq /data/QL/rna_cancer/project/WHOLE_SEQ-DATA_DIR/193T/Lib-a/193T.rna_2.fq.gz --out_prefix 193T  --CPU 16 -O /data/QL/rna_cancer/project/5.star_fusion/4.FusionInspector/193T --vis --include_Trinity
+
+#soap
+scp -r -P 1113 zf@202.120.143.49:/home/zf/rna_cancer/biosoft/SOAPfuse-v1.27/ ./
+cd /mnt/Vol01/ThyroidCaner_WES_RNA/QL/rna_cancer/data/soap
+
+perl SOAPfuse-S00-Generate_SOAPfuse_database.pl -wg /home/zf/rna_cancer/data/fasta/hg38.fa -gtf /home/zf/rna_cancer/data/Homo_sapiens.GRCh38.82.gtf -cbd /home/zf/rna_cancer/data/cytoBand.txt.gz -gf /home/zf/rna_cancer/data/download-all.txt -sd ~/rna_cancer/biosoft/SOAPfuse-v1.27 -dd /home/zf/rna_cancer/data -rft /home/zf/rna_cancer/data/HumanRef_refseg_symbols_relationship.list
+cd data/QL/rna_cancer/biosoft/SOAPfuse-v1.27
+export PATH=/data/QL/rna_cancer/biosoft/SOAPfuse-v1.27/source/:$PATH
+PERL5LIB=$PERL5LIB:/data/QL/rna_cancer/biosoft/SOAPfuse-v1.27/source/bin/perl_module; export PERL5LIB
+cd /home/zf/rna_cancer/biosoft/SOAPfuse-v1.27
+nohup perl SOAPfuse-RUN.pl -c ./config/config.txt -fd /data/QL/rna_cancer/project/WHOLE_SEQ-DATA_DIR -l /data/QL/rna_cancer/project/3.SOAP/sample.list -o /data/QL/rna_cancer/project/3.SOAP/ -fs 1 -es 9 &
+
+#####htseq
+scp -P 1113 zf@202.120.143.49:/home/zf/rna_cancer/project/4.star/5.out/10*N_Aligned.sortedByCoord.out.bam /data/QL/rna_cancer/project/4.star/5.out
+conda create -n python2 python=2
+conda activate python2
+conda install -y STAR=2.4.2a
+cd /data/QL/rna_cancer/project/4.star/5.out\
+cat config2>config3
+cat config3 | while read id
+do
+htseq-count \
+-f bam \
+-r name \
+-s no \
+-a 10 \
+-t exon \
+-i gene_id \
+-m intersection-nonempty \
+${id}_Aligned.sortedByCoord.out.bam \
+ /data/QL/rna_cancer/data/gencode.v22.annotation.gtf > ${id}_counts.txt
+done
+
+cd /data/QL/rna_cancer/project/4.star/5.out/1
+perl -lne 'if ($ARGV=~/(.*)_counts.txt/){print "$1\t$_"}' *T_counts.txt >T1_count.txt
+
+########rsem
+conda activate rna-1
+rsem-prepare-reference --gtf /home/zf/rna_cancer/data/gencode.v22.annotation.gtf /home/zf/rna_cancer/data/GRCh38.d1.vd1.fa /home/zf/rna_cancer/project/7.rsem/1.ref -p 8
+rsem-calculate-expression --paired-end -no-bam-output --alignments -p 8 /home/zf/rna_cancer/project/4.star/5.out/9w/108N_Aligned.toTranscriptome.out.bam /home/zf/rna_cancer/project/7.rsem/1.ref /home/zf/rna_cancer/project/7.rsem/2.out
