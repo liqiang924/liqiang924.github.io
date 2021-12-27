@@ -26,3 +26,6 @@ seg_dat_list <- lapply(seg_files, function(f) {
 seg_dat <- do.call(rbind, seg_dat_list)
 gistic_input<- seg_dat %>% select(sample, chromosome, start.pos, end.pos, N.BAF, depth.ratio) %>% mutate(depth.ratio = as.numeric(depth.ratio)) %>% mutate(depth.ratio = log2(2 * depth.ratio) -1)
 write_tsv(gistic_input, "all_segments.txt")
+########GISTIC
+cd /home/zf/wes_cancer/project/8.cnv/gistic
+bash 63_gistic.sh
