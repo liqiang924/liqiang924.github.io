@@ -1,0 +1,28 @@
+pip install sequenza-utils
+git clone https://bitbucket.org/sequenza_tools/sequenza-utils
+cd sequenza-utils
+python setup.py test
+python setup.py install
+sequenza-utils gc_wiggle -w 50 --fasta /data/QL/rna_cancer/data/fasta/Homo_sapiens_assembly38.fasta -o /data/QL/wes_cancer/project/8.cnv/sequenza/hg38.gc50Base.txt.gz
+cd /data/QL/wes_cancer/project/8.cnv/sequenza
+cat /data/QL/wes_cancer/project/id1.txt | while read id; do sequenza-utils bam2seqz -gc hg38.gc50Base.txt.gz -F /data/QL/rna_cancer/data/fasta/Homo_sapiens_assembly38.fasta -n /data/QL/wes_cancer/project/5.gatk/bam/${id}N.bam -t /data/QL/wes_cancer/project/5.gatk/bam/${id}T.bam | gzip > ${id}T.seqz.gz; done
+cat /data/QL/wes_cancer/project/id1.txt | while read id; do sequenza-utils seqz_binning -w 50 -s ${id}T.seqz.gz | gzip > ${id}T_small.seqz.gz; done
+#######R
+library(sequenza)
+Sys.setenv("VROOM_CONNECTION_SIZE"=131072*10000)
+T94<- sequenza.extract("/data/QL/wes_cancer/project/8.cnv/sequenza/94T_small.seqz.gz",verbose=F)
+CP94<- sequenza.fit(T94)
+sequenza.results(sequenza.extract = T94,cp.table = CP94, sample.id = "94T",out.dir="94T")
+setwd("/data/QL/wes_cancer/project/8.cnv/sequenza/segment_63")
+library(tidyverse)
+library(readr)
+seg_files<- list.files(".", pattern = "*_segments.txt", full.names = F) 
+seg_dat_list <- lapply(seg_files, function(f) {
+        dat<- read_tsv(f, col_names = T, col_types = cols(.default = col_character()))
+        sample<- gsub("*_segments.txt", "", f)
+        dat$sample<- sample
+        return(dat)
+})
+seg_dat <- do.call(rbind, seg_dat_list)
+gistic_input<- seg_dat %>% select(sample, chromosome, start.pos, end.pos, N.BAF, depth.ratio) %>% mutate(depth.ratio = as.numeric(depth.ratio)) %>% mutate(depth.ratio = log2(2 * depth.ratio) -1)
+write_tsv(gistic_input, "all_segments.txt")
