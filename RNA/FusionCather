@@ -1,0 +1,4 @@
+cd /mnt/Vol01/ThyroidCaner_WES_RNA/QL/rna_cancer/biosoft
+conda activate python2
+wget http://sf.net/projects/fusioncatcher/files/bootstrap.py -O bootstrap.py
+python bootstrap.py -t --download
